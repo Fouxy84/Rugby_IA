@@ -1,0 +1,52 @@
+# ============================================================
+# Rugby IA — Dépendances Python
+# ============================================================
+
+# --- Computer Vision & Deep Learning ---
+ultralytics>=8.2.0            # YOLOv8 + ByteTrack intégré
+torch>=2.2.0
+torchvision>=0.17.0
+opencv-python-headless>=4.9.0
+
+# --- Analyse scientifique ---
+numpy>=1.26.0
+scipy>=1.12.0
+scikit-learn>=1.4.0
+pandas>=2.2.0
+
+# --- Visualisation ---
+matplotlib>=3.8.0
+seaborn>=0.13.0
+Pillow>=10.2.0
+
+# --- API & WebSocket ---
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+websockets>=12.0
+pydantic>=2.6.0
+python-multipart>=0.0.9       # upload de fichiers FastAPI
+
+# --- Téléchargement vidéo ---
+yt-dlp>=2024.3.10
+
+# --- Configuration & utilitaires ---
+PyYAML>=6.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+
+# --- Dashboard ---
+streamlit>=1.33.0
+
+# --- Roboflow / Dataset ---
+roboflow>=1.1.30
+
+# --- MLOps ---
+mlflow>=2.12.0
+
+# --- Logging ---
+python-json-logger>=2.0.7
+
+# --- Tests ---
+pytest>=8.1.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0                  # client de test FastAPI

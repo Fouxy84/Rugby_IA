@@ -1,0 +1,32 @@
+# ============================================================
+# Rugby IA — Augmentations YOLOv8 (fichier de référence)
+# Ce fichier documente les augmentations appliquées au fine-tuning.
+# Les valeurs sont aussi présentes dans config.yaml (finetune.augment).
+# ============================================================
+
+# Couleur / photométrie
+# Adapté pour les variations d'éclairage de stade (soleil, artifciel, nuit)
+hsv_h: 0.015        # Hue — variation de teinte (maillots colorés)
+hsv_s: 0.7          # Saturation — reflets sur le terrain mouillé
+hsv_v: 0.4          # Valeur (luminosité) — éclairages variables
+
+# Géométrique
+# Faible rotation car les cameras de diffusion sont toujours à l'horizontale
+degrees: 5.0        # Rotation max ±5° (caméra légèrement inclinée)
+translate: 0.1      # Translation 10% — décadrages
+scale: 0.5          # Scale 50% — zoom in/out
+shear: 2.0          # Cisaillement — angles de caméra obliques
+perspective: 0.0    # Pas de transformation de perspective (terrain plat)
+
+# Flip
+flipud: 0.0         # Pas de retournement vertical (terrain rugby orienté)
+fliplr: 0.5         # Retournement horizontal 50% (attaque à droite ou à gauche)
+
+# Compositions
+mosaic: 1.0         # Mosaic 4 images — diversification des contextes
+mixup: 0.1          # MixUp 10% — robustesse aux occlusions
+copy_paste: 0.1     # Copy-Paste — augmente les instances rares (arbitres, ballons)
+
+# Effaçage aléatoire
+# Simule les occlusions entre joueurs (très fréquentes au rugby)
+erasing: 0.4        # Efface 40% des bboxes — robustesse aux corps partiels

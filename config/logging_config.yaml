@@ -1,0 +1,38 @@
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  standard:
+    format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: "%(asctime)s %(name)s %(levelname)s %(message)s"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stdout
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: standard
+    filename: logs/rugby_ia.log
+    maxBytes: 10485760   # 10MB
+    backupCount: 5
+
+root:
+  level: DEBUG
+  handlers: [console, file]
+
+loggers:
+  rugby_ia:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: false
+  uvicorn:
+    level: INFO
+  ultralytics:
+    level: WARNING

@@ -1,0 +1,208 @@
+# ============================================================
+# Rugby IA - Configuration principale
+# ============================================================
+
+project:
+  name: Rugby_IA
+  version: "1.0.0"
+  description: "Analyse IA temps réel de matchs de rugby"
+
+# --- Chemins ---
+paths:
+  data_raw: "data/raw"
+  data_processed: "data/processed"
+  annotations: "data/annotations"
+  models: "data/models"
+  outputs: "data/outputs"
+  heatmaps: "data/outputs/heatmaps"
+  tags: "data/outputs/tags"
+  clips: "data/outputs/clips"
+
+# --- Vidéo ---
+video:
+  supported_formats: ["mp4", "avi", "mkv", "mov", "webm"]
+  default_fps: 25
+  resize_width: 1280
+  resize_height: 720
+  batch_size: 8           # frames par batch pour inférence
+
+# --- Détection joueurs (YOLOv8) ---
+detection:
+  model_name: "yolov8x.pt"         # poids pré-entraînés
+  fine_tuned_weights: "data/models/rugby_detector.pt"
+  confidence_threshold: 0.45
+  iou_threshold: 0.50
+  classes:
+    player: 0
+    referee: 1
+    ball: 2
+  device: "cuda"                    # "cuda" ou "cpu"
+
+# --- Tracking (ByteTrack) ---
+tracking:
+  track_thresh: 0.50
+  track_buffer: 30
+  match_thresh: 0.80
+  min_box_area: 100
+  max_time_lost: 60               # frames avant de perdre un joueur
+
+# --- Classification des phases de jeu ---
+phase_classifier:
+  model_path: "data/models/phase_classifier.pt"
+  sequence_length: 30             # frames analysées par séquence
+  classes:
+    - "jeu_courant"
+    - "melee"
+    - "touche"
+    - "essai"
+    - "coup_de_pied"
+    - "ruck"
+    - "maul"
+    - "hors_jeu"
+    - "remise_en_jeu"
+  confidence_threshold: 0.60
+
+# --- Détection d'événements ---
+events:
+  try_zone_width: 10              # mètres depuis la ligne d'en-but
+  min_event_duration: 0.5         # secondes
+  cooldown_seconds: 3             # anti-doublon
+  severity_levels: ["info", "warning", "critical"]
+
+# --- Heatmaps ---
+heatmap:
+  resolution: [105, 68]           # dimensions terrain rugby (mètres)
+  sigma: 2.0                      # gaussienne pour le lissage
+  colormap: "RdYlGn"
+  update_interval: 5              # secondes entre chaque refresh
+  zones:
+    - name: "En-but adverse"
+      x: [95, 105]
+      y: [0, 68]
+    - name: "22m adverse"
+      x: [83, 105]
+      y: [0, 68]
+    - name: "Zone centrale"
+      x: [40, 65]
+      y: [0, 68]
+    - name: "22m propre"
+      x: [0, 22]
+      y: [0, 68]
+
+# --- Reconnaissance de patterns ---
+patterns:
+  model_path: "data/models/pattern_model.pt"
+  window_size: 90                 # frames de contexte
+  patterns:
+    - "pick_and_go"
+    - "mouvement_de_switch"
+    - "jeu_au_pied"
+    - "attaque_rapide"
+    - "defense_rideau"
+    - "linebreak"
+    - "maul_drive"
+
+# --- API FastAPI ---
+api:
+  host: "0.0.0.0"
+  port: 8000
+  reload: false
+  cors_origins: ["http://localhost:8501", "http://localhost:3000"]
+  max_upload_size_mb: 2000
+
+# --- WebSocket temps réel ---
+websocket:
+  ping_interval: 20
+  max_connections: 10
+  broadcast_interval: 0.1         # secondes entre chaque émission
+
+# --- Dashboard Streamlit ---
+dashboard:
+  port: 8501
+  theme: "dark"
+  refresh_rate_ms: 100
+
+# --- MLflow ---
+mlflow:
+  tracking_uri: "mlruns"
+  experiment_name: "rugby_ia_detection"
+
+# --- Fine-tuning YOLOv8 (Roboflow) ---
+finetune:
+  # Roboflow — projets rugby disponibles (remplir l'API key dans .env)
+  roboflow_workspace: "rugby-ia"           # votre workspace Roboflow (créé auto si absent)
+  datasets:
+    # Détection joueurs + ballon (dataset principal)
+    players:
+      workspace: "roboflow-100"
+      project: "rugby-detection"           # ou "rugby-players-2" selon disponibilité
+      version: 1
+      format: "yolov8"
+      export_dir: "data/roboflow/players"
+    # Dataset ballon uniquement (optionnel, pour améliorer la précision)
+    ball:
+      workspace: "roboflow-100"
+      project: "ball-detection-by-team-color"
+      version: 2
+      format: "yolov8"
+      export_dir: "data/roboflow/ball"
+
+  # Mapping classes Roboflow → classes Rugby IA
+  # (à adapter selon les labels du dataset téléchargé)
+  class_mapping:
+    "player": 0
+    "Player": 0
+    "rugby player": 0
+    "referee": 1
+    "Referee": 1
+    "ball": 2
+    "Ball": 2
+    "rugby ball": 2
+
+  # Hyperparamètres d'entraînement YOLOv8
+  base_model: "yolov8x.pt"           # modèle de départ
+  output_dir: "data/models"
+  output_name: "rugby_detector"      # → rugby_detector.pt après export
+  epochs: 100
+  imgsz: 1280                        # résolution (terrain en 1080p → 1280)
+  batch: 16                          # réduire à 8 si VRAM < 12 GB
+  patience: 20                       # early stopping
+  optimizer: "AdamW"
+  lr0: 0.001
+  lrf: 0.01                          # lr finale = lr0 * lrf
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 5
+  close_mosaic: 15                   # désactive mosaic sur les N dernières epochs
+  device: "0"                        # "0" = GPU 0, "cpu" pour CPU
+  workers: 8
+  cache: true                        # mise en cache des images en RAM
+  rect: false                        # rectangular training
+  cos_lr: true                       # cosine LR scheduler
+  amp: true                          # Automatic Mixed Precision
+  plots: true                        # courbes d'entraînement
+  val: true
+  exist_ok: true
+
+  # Augmentations (surcharge les défauts Ultralytics)
+  augment:
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 5.0                     # faible rotation (terrain horizontal)
+    translate: 0.1
+    scale: 0.5
+    shear: 2.0
+    perspective: 0.0
+    flipud: 0.0                      # pas de retournement vertical
+    fliplr: 0.5
+    mosaic: 1.0
+    mixup: 0.1
+    copy_paste: 0.1
+    erasing: 0.4                     # simule les occlusions de joueurs
+
+# --- Sources de données ---
+data_sources:
+  youtube_dl_format: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+  world_rugby_api: "https://api.worldrugby.org/v1"
+  espn_feed: "https://site.api.espn.com/apis/site/v2/sports/rugby"

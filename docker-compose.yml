@@ -1,0 +1,70 @@
+version: "3.9"
+
+services:
+  # ── API FastAPI ──────────────────────────────────────────────────────────────
+  api:
+    build: .
+    container_name: rugby_ia_api
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - PYTHONPATH=/app
+      - CUDA_VISIBLE_DEVICES=0
+    env_file:
+      - .env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Dashboard Streamlit ──────────────────────────────────────────────────────
+  dashboard:
+    build: .
+    container_name: rugby_ia_dashboard
+    command: streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+      - ./data:/app/data
+    environment:
+      - PYTHONPATH=/app
+    env_file:
+      - .env
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ── MLflow Tracking ──────────────────────────────────────────────────────────
+  mlflow:
+    image: python:3.11-slim
+    container_name: rugby_ia_mlflow
+    command: >
+      sh -c "pip install mlflow --quiet &&
+             mlflow server --host 0.0.0.0 --port 5000
+             --backend-store-uri /mlruns
+             --default-artifact-root /mlruns/artifacts"
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/mlruns
+    restart: unless-stopped
+
+volumes:
+  data:
+  logs:
+  mlruns:
