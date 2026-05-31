@@ -198,13 +198,19 @@ def train(args, cfg: dict):
         # Entraînement
         results = model.train(**train_kwargs)
 
-        # Log des métriques finales
-        metrics = results.results_dict if hasattr(results, "results_dict") else {}
-        for k, v in metrics.items():
+        # Log des métriques finales (globales + par classe après validation explicite)
+        train_metrics = results.results_dict if hasattr(results, "results_dict") else {}
+        for k, v in train_metrics.items():
             try:
                 mlflow.log_metric(k.replace("/", "_"), float(v))
             except (ValueError, TypeError):
                 pass
+
+        # Log métriques par classe depuis la validation finale
+        val_metrics = evaluate(model, Path(str(args.data)), device, train_kwargs["imgsz"])
+        for k, v in val_metrics.items():
+            if v is not None:
+                mlflow.log_metric(k.replace("/", "_"), float(v))
 
         # Chemin du meilleur modèle
         best_weights = Path("runs/detect") / train_kwargs["name"] / "weights" / "best.pt"
@@ -218,7 +224,7 @@ def train(args, cfg: dict):
         mlflow.log_param("best_weights_path", str(best_weights))
         logger.info("MLflow run ID : %s", run.info.run_id)
 
-    return model, best_weights, results
+    return model, best_weights, results, val_metrics
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +232,7 @@ def train(args, cfg: dict):
 # ---------------------------------------------------------------------------
 
 def evaluate(model, data_path: Path, device: str, imgsz: int = 1280) -> dict:
-    """Lance la validation et retourne les métriques."""
+    """Lance la validation et retourne les métriques globales et par classe."""
     logger.info("Évaluation sur le set de validation…")
     val_results = model.val(
         data=str(data_path),
@@ -241,6 +247,19 @@ def evaluate(model, data_path: Path, device: str, imgsz: int = 1280) -> dict:
         "precision":getattr(val_results.box, "mp",     None),
         "recall":   getattr(val_results.box, "mr",     None),
     }
+
+    # --- Métriques par classe (player=0, referee=1, ball=2) ---
+    try:
+        ap50_per_class  = getattr(val_results.box, "ap50", None)
+        class_indices   = getattr(val_results.box, "ap_class_index", None)
+        names = getattr(val_results, "names", {0: "player", 1: "referee", 2: "ball"})
+        if ap50_per_class is not None and class_indices is not None:
+            for i, cls_idx in enumerate(class_indices):
+                cls_name = names.get(int(cls_idx), f"class_{cls_idx}")
+                metrics[f"mAP50_{cls_name}"] = float(ap50_per_class[i])
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Métriques par classe indisponibles : %s", exc)
+
     logger.info(
         "Résultats : mAP50=%.3f | mAP50-95=%.3f | P=%.3f | R=%.3f",
         metrics["mAP50"]    or 0,
@@ -248,6 +267,9 @@ def evaluate(model, data_path: Path, device: str, imgsz: int = 1280) -> dict:
         metrics["precision"]or 0,
         metrics["recall"]   or 0,
     )
+    for key in ("mAP50_player", "mAP50_ball"):
+        if key in metrics:
+            logger.info("  %-20s %.3f", key, metrics[key])
     return metrics
 
 
@@ -347,10 +369,7 @@ def main():
 
     # --- Entraînement ---
     validate_data_yaml(data_path)
-    model, best_weights, results = train(args, cfg)
-
-    # --- Évaluation finale ---
-    metrics = evaluate(model, data_path, device, imgsz)
+    model, best_weights, results, val_metrics = train(args, cfg)
 
     # --- Export ---
     if not args.no_export:
@@ -363,11 +382,15 @@ def main():
         print("\n" + "=" * 60)
         print("  FINE-TUNING TERMINÉ")
         print("=" * 60)
-        print(f"  Modèle déployé : {deployed}")
-        print(f"  mAP50          : {metrics.get('mAP50', 0):.4f}")
-        print(f"  mAP50-95       : {metrics.get('mAP50_95', 0):.4f}")
-        print(f"  Précision      : {metrics.get('precision', 0):.4f}")
-        print(f"  Rappel         : {metrics.get('recall', 0):.4f}")
+        print(f"  Modèle déployé    : {deployed}")
+        print(f"  mAP50 (global)    : {val_metrics.get('mAP50', 0):.4f}")
+        print(f"  mAP50-95 (global) : {val_metrics.get('mAP50_95', 0):.4f}")
+        if "mAP50_player" in val_metrics:
+            print(f"  mAP50 player      : {val_metrics['mAP50_player']:.4f}")
+        if "mAP50_ball" in val_metrics:
+            print(f"  mAP50 ball        : {val_metrics['mAP50_ball']:.4f}")
+        print(f"  Précision         : {val_metrics.get('precision', 0):.4f}")
+        print(f"  Rappel            : {val_metrics.get('recall', 0):.4f}")
         print("=" * 60)
         print("\nL'API Rugby IA utilisera automatiquement ce modèle.")
         print(f"  → Configuré dans config.yaml : detection.fine_tuned_weights")

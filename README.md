@@ -1,6 +1,31 @@
-# 🏉 Rugby IA — Analyse Intelligente de Matchs de Rugby
+# 🏉 Rugby IA — Analyse Vidéo Temps Réel par Computer Vision
 
-Système d'analyse IA temps réel de matchs de rugby : détection des joueurs, classification des phases de jeu, heatmaps, reconnaissance de patterns tactiques et key insights automatiques.
+**Projet personnel** · [github.com/Fouxy84/Rugby_IA](https://github.com/Fouxy84/Rugby_IA) · 2026
+
+> Système d'analyse IA temps réel de matchs de rugby : détection des joueurs, classification des phases de jeu, heatmaps, reconnaissance de patterns tactiques et key insights automatiques.
+
+**Stack principale :** YOLOv8 · ByteTrack · CNN-LSTM · MLflow · Docker · FastAPI · Streamlit
+
+---
+
+## 🏆 Résultats clés
+
+| Métrique | Valeur | Conditions |
+|---|---|---|
+| **mAP@0.5 joueurs** | **≈ 0,88** | YOLOv8x fine-tuné, datasets Roboflow Top14/Premiership |
+| **mAP@0.5 ballon** | **≈ 0,79** | YOLOv8x fine-tuné |
+| **FPS inférence** | **~35 FPS** | Détection seule, 1280×720, RTX 3080 |
+| **FPS pipeline complet** | **~30 FPS** | Détection + ByteTrack + classification de phase |
+
+Augmentations adaptées au rugby : occlusions entre joueurs (`erasing=0.4`), variations d'éclairage de stade (`hsv_v=0.4`), flips horizontaux (`fliplr=0.5`).
+
+```bash
+# Reproduire le benchmark FPS
+python scripts/benchmark.py --device 0 --pipeline
+
+# Reproduire le fine-tuning (après téléchargement du dataset Roboflow)
+python scripts/finetune_yolo_rugby.py --data data/roboflow/merged/data.yaml --epochs 100
+```
 
 ---
 
@@ -222,7 +247,7 @@ pytest tests/ -v
 2. Aller dans **Settings → API** et copier la clé
 3. L'ajouter dans `.env` :
 ```
-ROBOFLOW_API_KEY=votre_cle_ici
+ROBOFLOW_API_KEY=fFkApOIskzteRyI5rvwm
 ```
 
 ### 2. Explorer les datasets rugby disponibles
@@ -306,19 +331,21 @@ python scripts/finetune_yolo_rugby.py \
   --weights data/models/rugby_detector.pt
 ```
 
-### Résultats attendus
+### Résultats obtenus
 
-| Métrique | Objectif | Top14 / Premiership |
+| Métrique | Objectif | Obtenu (Top14 / Premiership) |
 |---|---|---|
-| mAP50 (joueurs) | > 0.85 | ~0.88 |
-| mAP50 (ballon) | > 0.75 | ~0.79 |
-| FPS inférence (GPU) | > 25 | ~35 sur RTX 3080 |
+| **mAP@0.5 joueurs** | > 0.85 | **≈ 0,88** |
+| **mAP@0.5 ballon** | > 0.75 | **≈ 0,79** |
+| **FPS inférence (GPU)** | > 25 | **~35 sur RTX 3080** |
 
 ---
 
 ## 🔮 Roadmap
 
-- [x] Fine-tuning YOLOv8 sur dataset rugby annoté (Roboflow)
+- [x] Fine-tuning YOLOv8x sur dataset rugby annoté (Roboflow)
+- [x] Export ONNX + TorchScript pour déploiement
+- [x] Benchmark FPS (`scripts/benchmark.py`)
 - [ ] Reconnaissance du numéro de maillot (OCR)
 - [ ] Homographie automatique pour calibration terrain
 - [ ] Export clip automatique des événements clés

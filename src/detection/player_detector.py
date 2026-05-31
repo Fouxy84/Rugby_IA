@@ -186,6 +186,58 @@ class PlayerDetector:
             )
         return detections
 
+    def benchmark_fps(
+        self,
+        width: int = 1280,
+        height: int = 720,
+        n_warmup: int = 5,
+        n_runs: int = 100,
+    ) -> dict:
+        """
+        Mesure la vitesse d'inférence sur des frames synthétiques.
+
+        Args:
+            width:    Largeur de la frame de test (pixels).
+            height:   Hauteur de la frame de test (pixels).
+            n_warmup: Nombre de passes de chauffe (non comptées).
+            n_runs:   Nombre de passes mesurées.
+
+        Returns:
+            Dict avec fps_mean, fps_min, fps_max, ms_per_frame_mean.
+        """
+        import time  # noqa: PLC0415
+
+        dummy = np.random.randint(0, 255, (height, width, 3), dtype=np.uint8)
+
+        # Chauffe
+        for _ in range(n_warmup):
+            self.detect(dummy)
+
+        times = []
+        for _ in range(n_runs):
+            t0 = time.perf_counter()
+            self.detect(dummy)
+            times.append(time.perf_counter() - t0)
+
+        fps_values = [1.0 / t for t in times]
+        result = {
+            "fps_mean":          round(sum(fps_values) / len(fps_values), 1),
+            "fps_min":           round(min(fps_values), 1),
+            "fps_max":           round(max(fps_values), 1),
+            "ms_per_frame_mean": round(1000 * sum(times) / len(times), 2),
+            "device":            self.device,
+            "model":             str(self.model_path),
+            "resolution":        f"{width}x{height}",
+        }
+        logger.info(
+            "Benchmark inférence : %.1f FPS (%.2f ms/frame) sur %s [%s]",
+            result["fps_mean"],
+            result["ms_per_frame_mean"],
+            result["device"],
+            result["resolution"],
+        )
+        return result
+
 
 # ---------------------------------------------------------------------------
 # Tracker ByteTrack (via Ultralytics intégré)

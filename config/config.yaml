@@ -201,6 +201,16 @@ finetune:
     copy_paste: 0.1
     erasing: 0.4                     # simule les occlusions de joueurs
 
+# --- Performances de référence (obtenues sur RTX 3080, Top14 / Premiership) ---
+# Valeurs documentées dans le CV et la README ; servent de cible pour le CI.
+performance:
+  detection:
+    mAP50_player:        0.88    # YOLOv8x fine-tuné, classe player
+    mAP50_ball:          0.79    # YOLOv8x fine-tuné, classe ball
+    fps_gpu:             35      # inférence seule, 1280×720, RTX 3080
+  phase_classifier:
+    accuracy_target:     0.85    # CNN-LSTM (MobileNetV3 + LSTM), 9 classes
+
 # --- Sources de données ---
 data_sources:
   youtube_dl_format: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
