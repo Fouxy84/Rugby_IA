@@ -129,23 +129,28 @@ mlflow:
 
 # --- Fine-tuning YOLOv8 (Roboflow) ---
 finetune:
-  # Roboflow — projets rugby disponibles (remplir l'API key dans .env)
-  roboflow_workspace: "rugby-ia"           # votre workspace Roboflow (créé auto si absent)
+  # Workspace Roboflow de l'utilisateur
+  # https://app.roboflow.com/adams-workspace-ppons
+  roboflow_workspace: "adams-workspace-ppons"
+
+  # Datasets rugby depuis Roboflow Universe
+  # https://universe.roboflow.com/search?q=rugby+detection
+  # Téléchargement : python scripts/download_roboflow_dataset.py --api-key <KEY>
   datasets:
-    # Détection joueurs + ballon (dataset principal)
+    # Dataset principal : joueurs, arbitres, ballon (Roboflow-100)
     players:
       workspace: "roboflow-100"
-      project: "rugby-detection"           # ou "rugby-players-2" selon disponibilité
-      version: 1
-      format: "yolov8"
-      export_dir: "data/roboflow/players"
-    # Dataset ballon uniquement (optionnel, pour améliorer la précision)
-    ball:
-      workspace: "roboflow-100"
-      project: "ball-detection-by-team-color"
+      project: "rugby-players-2"
       version: 2
       format: "yolov8"
-      export_dir: "data/roboflow/ball"
+      export_dir: "data/roboflow/roboflow-100__rugby-players-2_v2"
+    # Dataset secondaire : joueurs Top14/Premiership (5 versions)
+    analysis:
+      workspace: "rugby-analysis"
+      project: "rugby-player-detection"
+      version: 5
+      format: "yolov8"
+      export_dir: "data/roboflow/rugby-analysis__rugby-player-detection_v5"
 
   # Mapping classes Roboflow → classes Rugby IA
   # (à adapter selon les labels du dataset téléchargé)

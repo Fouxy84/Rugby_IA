@@ -104,7 +104,13 @@ cp .env.example .env
 ### 3. Créer les répertoires
 
 ```bash
+# Linux / Mac
 mkdir -p data/raw data/processed data/models data/outputs/heatmaps logs mlruns
+```
+
+```powershell
+# Windows PowerShell
+"data/raw","data/processed","data/models","data/outputs/heatmaps","logs","mlruns" | ForEach-Object { New-Item -ItemType Directory -Force -Path $_ }
 ```
 
 ---
@@ -243,43 +249,49 @@ pytest tests/ -v
 
 ### 1. Obtenir une clé API Roboflow
 
-1. Créer un compte sur [app.roboflow.com](https://app.roboflow.com)
-2. Aller dans **Settings → API** et copier la clé
+1. Connectez-vous sur [app.roboflow.com/adams-workspace-ppons](https://app.roboflow.com/adams-workspace-ppons)
+2. **Settings → API** → copier la clé
 3. L'ajouter dans `.env` :
 ```
-ROBOFLOW_API_KEY=fFkApOIskzteRyI5rvwm
+ROBOFLOW_API_KEY=votre_cle_roboflow_ici
 ```
 
 ### 2. Explorer les datasets rugby disponibles
 
 ```bash
+# Listing local + recherche live Universe
+python scripts/download_roboflow_dataset.py --list
 python scripts/download_roboflow_dataset.py --api-key <KEY> --list
 ```
 
-| Workspace | Projet | Classes |
-|---|---|---|
-| `roboflow-100` | `rugby-detection` | player, ball |
-| `roboflow-100` | `rugby-players-2` | player, referee, ball |
-| `rugby-analysis` | `rugby-player-detection` | player, referee, ball |
-| `sports-detection` | `rugby-ball-detection` | ball |
+| # | Workspace | Projet | v | Classes |
+|---|---|---|---|---|
+| 1 | `roboflow-100` | `rugby-players-2` | 2 | player, referee, ball |
+| 2 | `roboflow-100` | `rugby-detection` | 1 | player, ball |
+| 3 | `rugby-analysis` | `rugby-player-detection` | 5 | player, referee, ball |
+| 4 | `sports-detection` | `rugby-ball-detection` | 1 | ball |
 
-Exploration web : [universe.roboflow.com/search?q=rugby](https://universe.roboflow.com/search?q=rugby)
+Exploration web : [universe.roboflow.com/search?q=rugby+detection](https://universe.roboflow.com/search?q=rugby+detection)  
+Votre workspace : [app.roboflow.com/adams-workspace-ppons](https://app.roboflow.com/adams-workspace-ppons)
 
 ### 3. Télécharger le dataset
 
 ```bash
-# Dataset par défaut (configuré dans config.yaml)
+# Téléchargement par défaut (2 premiers datasets, fallback automatique)
 python scripts/download_roboflow_dataset.py --api-key <KEY>
 
 # Dataset spécifique
 python scripts/download_roboflow_dataset.py \
   --api-key <KEY> \
-  --workspace roboflow-100 \
-  --project rugby-detection \
-  --version 1
+  --workspace rugby-analysis \
+  --project rugby-player-detection \
+  --version 5
 
 # Tous les datasets rugby connus (fusion automatique)
-python scripts/download_roboflow_dataset.py --api-key <KEY> --all-known
+python scripts/download_roboflow_dataset.py --api-key <KEY> --all
+
+# Recherche live sur Roboflow Universe
+python scripts/download_roboflow_dataset.py --api-key <KEY> --search "rugby detection"
 ```
 
 Le script :
