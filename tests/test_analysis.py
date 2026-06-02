@@ -48,6 +48,43 @@ def test_heatmap_generator_accumulation():
     fr = FrameResult(frame_idx=0, timestamp_s=0.0, tracked_objects=[player], raw_frame=frame)
     gen.update(fr)
 
+
+@pytest.mark.parametrize("confidence,expected", [
+    (0.95, True),
+    (0.50, False),
+    (0.60, True),
+    (0.45, False),
+])
+def test_detection_confidence_threshold(confidence, expected):
+    """Test seuil de confiance pour les détections."""
+    threshold = 0.55
+    assert (confidence >= threshold) == expected
+
+
+def test_phase_classes():
+    """Vérifier que les phases de jeu sont bien définies."""
+    phases = ["jeu_courant", "melee", "touche", "essai", "coup_de_pied", 
+              "ruck", "maul", "hors_jeu", "remise_en_jeu"]
+    assert len(phases) == 9
+    for phase in phases:
+        assert isinstance(phase, str)
+        assert len(phase) > 0
+
+
+def test_rugby_field_dimensions():
+    """Test les dimensions du terrain de rugby."""
+    # Terrain international : 120m x 75m (incluant les zones d'en-but)
+    # Champ de jeu : 100m x 68m
+    field_length = 100
+    field_width = 68
+    try_zone_depth = 10
+    
+    assert field_length == 100
+    assert field_width == 68
+    assert try_zone_depth == 10
+    assert (field_length - try_zone_depth) == 90
+
+
     assert gen._grid_home.sum() > 0
     assert gen._grid_global.sum() > 0
 

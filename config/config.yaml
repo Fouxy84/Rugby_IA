@@ -22,13 +22,13 @@ paths:
 video:
   supported_formats: ["mp4", "avi", "mkv", "mov", "webm"]
   default_fps: 25
-  resize_width: 1280
-  resize_height: 720
-  batch_size: 8           # frames par batch pour inférence
+  resize_width: 640       # CPU: réduit de 1280
+  resize_height: 360      # CPU: réduit de 720
+  batch_size: 4           # CPU: réduit de 8
 
 # --- Détection joueurs (YOLOv8) ---
 detection:
-  model_name: "yolov8x.pt"         # poids pré-entraînés
+  model_name: "yolov8s.pt"         # CPU: small au lieu de yolov8x
   fine_tuned_weights: "data/models/rugby_detector.pt"
   confidence_threshold: 0.45
   iou_threshold: 0.50
@@ -36,7 +36,7 @@ detection:
     player: 0
     referee: 1
     ball: 2
-  device: "cuda"                    # "cuda" ou "cpu"
+  device: "cpu"                     # CPU-only environment
 
 # --- Tracking (ByteTrack) ---
 tracking:
@@ -165,26 +165,26 @@ finetune:
     "rugby ball": 2
 
   # Hyperparamètres d'entraînement YOLOv8
-  base_model: "yolov8x.pt"           # modèle de départ
+  base_model: "yolov8s.pt"           # CPU: small au lieu de yolov8x
   output_dir: "data/models"
   output_name: "rugby_detector"      # → rugby_detector.pt après export
-  epochs: 100
-  imgsz: 1280                        # résolution (terrain en 1080p → 1280)
-  batch: 16                          # réduire à 8 si VRAM < 12 GB
-  patience: 20                       # early stopping
+  epochs: 15                         # CPU: réduit de 100 pour test rapide
+  imgsz: 640                         # CPU: réduit de 1280
+  batch: 4                           # CPU: réduit de 16
+  patience: 10                       # CPU: early stopping agressif
   optimizer: "AdamW"
   lr0: 0.001
   lrf: 0.01                          # lr finale = lr0 * lrf
   momentum: 0.937
   weight_decay: 0.0005
-  warmup_epochs: 5
-  close_mosaic: 15                   # désactive mosaic sur les N dernières epochs
-  device: "0"                        # "0" = GPU 0, "cpu" pour CPU
-  workers: 8
-  cache: true                        # mise en cache des images en RAM
+  warmup_epochs: 3                   # CPU: réduit de 5
+  close_mosaic: 10                   # désactive mosaic plus tôt
+  device: "cpu"                      # CPU-only
+  workers: 2                         # CPU: réduit de 8
+  cache: false                       # CPU: pas de cache en RAM pour économiser
   rect: false                        # rectangular training
   cos_lr: true                       # cosine LR scheduler
-  amp: true                          # Automatic Mixed Precision
+  amp: false                         # CPU: désactive AMP (incompatible)
   plots: true                        # courbes d'entraînement
   val: true
   exist_ok: true
