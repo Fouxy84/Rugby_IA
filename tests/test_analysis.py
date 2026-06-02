@@ -85,10 +85,6 @@ def test_rugby_field_dimensions():
     assert (field_length - try_zone_depth) == 90
 
 
-    assert gen._grid_home.sum() > 0
-    assert gen._grid_global.sum() > 0
-
-
 def test_pattern_result_to_dict():
     from src.analysis.pattern_recognizer import PatternResult
 
