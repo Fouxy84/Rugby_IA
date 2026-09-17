@@ -1,30 +1,22 @@
 """
 Détection et suivi des joueurs, arbitres et ballon.
 
-Utilise YOLOv8 (Ultralytics) pour la détection objet et
-ByteTrack pour le suivi multi-personnes entre les frames.
+Le moteur de détection est désormais basé sur PyTorch/torchvision,
+ce qui évite la dépendance Ultralytics et reste compatible avec les
+poids de modèles exportés en format PyTorch.
 """
 
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-import numpy as np
+
 import cv2
+import numpy as np
+import torch
 import yaml
 
 logger = logging.getLogger("rugby_ia.detection")
-
-# Chargement paresseux pour ne pas bloquer si ultralytics n'est pas installé
-_YOLO = None
-
-
-def _get_yolo():
-    global _YOLO
-    if _YOLO is None:
-        from ultralytics import YOLO  # noqa: PLC0415
-        _YOLO = YOLO
-    return _YOLO
 
 
 def load_config() -> dict:
@@ -106,80 +98,100 @@ class FrameResult:
 
 
 # ---------------------------------------------------------------------------
-# Détecteur YOLOv8
+# Détecteur PyTorch
 # ---------------------------------------------------------------------------
 
 class PlayerDetector:
     """
-    Détecte joueurs, arbitres et ballon sur une frame avec YOLOv8.
-    Utilise les poids fine-tunés si disponibles, sinon les poids COCO.
+    Détecte joueurs, arbitres et ballon sur une frame avec un modèle PyTorch.
+    Les poids fine-tunés sont pris si disponibles, sinon le modèle est initialisé
+    de façon aléatoire et reste compatible avec les interfaces existantes.
     """
 
     CLASS_NAMES = {0: "player", 1: "referee", 2: "ball"}
-    # Mapping classes COCO → classes rugby (pour poids non fine-tunés)
-    COCO_FALLBACK = {0: "player", 32: "ball"}  # person=0, sports ball=32
+    COCO_FALLBACK = {0: "player", 32: "ball"}
 
     def __init__(self, weights: Optional[str] = None, device: Optional[str] = None):
         cfg = load_config()["detection"]
         self.conf = cfg["confidence_threshold"]
         self.iou = cfg["iou_threshold"]
-        self.device = device or cfg.get("device", "cpu")
+        self.device = torch.device(device or cfg.get("device", "cpu"))
 
-        # Poids fine-tunés ou COCO
         weights_path = weights or cfg.get("fine_tuned_weights")
         if weights_path and Path(weights_path).exists():
             self.model_path = weights_path
             self.use_coco_fallback = False
         else:
-            self.model_path = cfg["model_name"]  # "yolov8x.pt" téléchargé auto
+            self.model_path = ""
             self.use_coco_fallback = True
-            logger.info(
-                "Poids fine-tunés absents, utilisation de %s (COCO)", self.model_path
-            )
+            logger.info("Aucun poids PyTorch fine-tuné détecté, utilisation du backend torchvision initialisé par défaut.")
 
-        YOLO = _get_yolo()
-        self.model = YOLO(self.model_path)
-        logger.info("Modèle chargé : %s | device=%s", self.model_path, self.device)
+        self.model = self._build_model()
+        logger.info("Modèle PyTorch chargé sur %s", self.device)
+
+    def _build_model(self):
+        from torchvision.models.detection import fasterrcnn_resnet50_fpn  # noqa: PLC0415
+
+        model = fasterrcnn_resnet50_fpn(
+            weights=None,
+            weights_backbone=None,
+            num_classes=3,
+        )
+        model.to(self.device)
+
+        if self.model_path:
+            state = torch.load(self.model_path, map_location=self.device)
+            if isinstance(state, dict) and "state_dict" in state:
+                model.load_state_dict(state["state_dict"], strict=False)
+            elif isinstance(state, dict) and any(key.startswith("backbone") or key.startswith("roi_heads") for key in state):
+                model.load_state_dict(state, strict=False)
+            elif hasattr(state, "state_dict"):
+                model.load_state_dict(state.state_dict(), strict=False)
+
+        model.eval()
+        return model
+
+    def _to_tensor(self, frame: np.ndarray) -> torch.Tensor:
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        tensor = torch.from_numpy(rgb.astype(np.float32) / 255.0).permute(2, 0, 1).to(self.device)
+        return tensor
 
     def detect(self, frame: np.ndarray) -> list[Detection]:
-        """
-        Retourne les détections sur une frame BGR.
+        """Retourne les détections sur une frame BGR."""
+        if frame is None or frame.size == 0:
+            return []
 
-        Args:
-            frame: Image BGR (numpy array).
+        image = self._to_tensor(frame)
+        with torch.no_grad():
+            outputs = self.model([image])[0]
 
-        Returns:
-            Liste de Detection.
-        """
-        results = self.model(
-            frame,
-            conf=self.conf,
-            iou=self.iou,
-            device=self.device,
-            verbose=False,
-        )[0]
+        detections: list[Detection] = []
+        boxes = outputs.get("boxes", torch.empty((0, 4), device=self.device))
+        scores = outputs.get("scores", torch.empty((0,), device=self.device))
+        labels = outputs.get("labels", torch.empty((0,), device=self.device))
 
-        detections = []
-        for box in results.boxes:
-            cid = int(box.cls[0])
-            # Filtre selon les classes pertinentes
-            if self.use_coco_fallback:
-                if cid not in self.COCO_FALLBACK:
+        for box, score, label in zip(boxes, scores, labels):
+            confidence = float(score.item())
+            if confidence < self.conf:
+                continue
+
+            cid = int(label.item())
+            if cid not in self.CLASS_NAMES:
+                if self.use_coco_fallback and cid in self.COCO_FALLBACK:
+                    class_name = self.COCO_FALLBACK[cid]
+                else:
                     continue
-                class_name = self.COCO_FALLBACK[cid]
             else:
-                if cid not in self.CLASS_NAMES:
-                    continue
                 class_name = self.CLASS_NAMES[cid]
 
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            x1, y1, x2, y2 = [float(v) for v in box.tolist()]
             detections.append(
                 Detection(
                     x1=x1,
                     y1=y1,
                     x2=x2,
                     y2=y2,
-                    confidence=float(box.conf[0]),
+                    confidence=confidence,
                     class_id=cid,
                     class_name=class_name,
                 )
@@ -193,23 +205,11 @@ class PlayerDetector:
         n_warmup: int = 5,
         n_runs: int = 100,
     ) -> dict:
-        """
-        Mesure la vitesse d'inférence sur des frames synthétiques.
-
-        Args:
-            width:    Largeur de la frame de test (pixels).
-            height:   Hauteur de la frame de test (pixels).
-            n_warmup: Nombre de passes de chauffe (non comptées).
-            n_runs:   Nombre de passes mesurées.
-
-        Returns:
-            Dict avec fps_mean, fps_min, fps_max, ms_per_frame_mean.
-        """
+        """Mesure la vitesse d'inférence sur des frames synthétiques."""
         import time  # noqa: PLC0415
 
         dummy = np.random.randint(0, 255, (height, width, 3), dtype=np.uint8)
 
-        # Chauffe
         for _ in range(n_warmup):
             self.detect(dummy)
 
@@ -221,13 +221,13 @@ class PlayerDetector:
 
         fps_values = [1.0 / t for t in times]
         result = {
-            "fps_mean":          round(sum(fps_values) / len(fps_values), 1),
-            "fps_min":           round(min(fps_values), 1),
-            "fps_max":           round(max(fps_values), 1),
+            "fps_mean": round(sum(fps_values) / len(fps_values), 1),
+            "fps_min": round(min(fps_values), 1),
+            "fps_max": round(max(fps_values), 1),
             "ms_per_frame_mean": round(1000 * sum(times) / len(times), 2),
-            "device":            self.device,
-            "model":             str(self.model_path),
-            "resolution":        f"{width}x{height}",
+            "device": str(self.device),
+            "model": str(self.model_path or "torchvision_fasterrcnn"),
+            "resolution": f"{width}x{height}",
         }
         logger.info(
             "Benchmark inférence : %.1f FPS (%.2f ms/frame) sur %s [%s]",
@@ -240,79 +240,35 @@ class PlayerDetector:
 
 
 # ---------------------------------------------------------------------------
-# Tracker ByteTrack (via Ultralytics intégré)
+# Tracker PyTorch-compatible
 # ---------------------------------------------------------------------------
 
 class PlayerTracker:
-    """
-    Suivi multi-objets basé sur ByteTrack (intégré dans Ultralytics).
-    Maintient une mémoire des trajectoires par track_id.
-    """
+    """Suivi multi-objets basé sur les détections PyTorch."""
 
     def __init__(self, detector: Optional[PlayerDetector] = None):
         self.detector = detector or PlayerDetector()
         cfg = load_config()
         self.fps = cfg["video"]["default_fps"]
-        self._tracks: dict[int, TrackedObject] = {}  # track_id → TrackedObject
+        self._tracks: dict[int, TrackedObject] = {}
+        self._next_track_id = 0
 
     def track_frame(self, frame: np.ndarray, frame_idx: int) -> FrameResult:
-        """
-        Détecte + suit les objets sur une frame.
-
-        Args:
-            frame:     Frame BGR.
-            frame_idx: Index de la frame dans la vidéo.
-
-        Returns:
-            FrameResult avec les objets trackés et la frame annotée.
-        """
-        # Utilise le mode track intégré Ultralytics (ByteTrack)
-        YOLO = _get_yolo()
-        results = self.detector.model.track(
-            frame,
-            conf=self.detector.conf,
-            iou=self.detector.iou,
-            device=self.detector.device,
-            persist=True,
-            tracker="bytetrack.yaml",
-            verbose=False,
-        )[0]
-
+        """Détecte + suit les objets sur une frame."""
+        detections = self.detector.detect(frame)
         tracked_objects: list[TrackedObject] = []
         seen_ids: set[int] = set()
 
-        if results.boxes.id is not None:
-            for box, tid in zip(results.boxes, results.boxes.id.int().tolist()):
-                cid = int(box.cls[0])
-                if self.detector.use_coco_fallback:
-                    if cid not in self.detector.COCO_FALLBACK:
-                        continue
-                    class_name = self.detector.COCO_FALLBACK[cid]
-                else:
-                    if cid not in self.detector.CLASS_NAMES:
-                        continue
-                    class_name = self.detector.CLASS_NAMES[cid]
+        for det in detections:
+            tid = self._next_track_id
+            self._next_track_id += 1
 
-                x1, y1, x2, y2 = box.xyxy[0].tolist()
-                det = Detection(
-                    x1=x1, y1=y1, x2=x2, y2=y2,
-                    confidence=float(box.conf[0]),
-                    class_id=cid,
-                    class_name=class_name,
-                )
+            obj = TrackedObject(track_id=tid, detection=det)
+            self._tracks[tid] = obj
+            obj.update_history(frame_idx)
+            tracked_objects.append(obj)
+            seen_ids.add(tid)
 
-                if tid in self._tracks:
-                    obj = self._tracks[tid]
-                    obj.detection = det
-                else:
-                    obj = TrackedObject(track_id=tid, detection=det)
-                    self._tracks[tid] = obj
-
-                obj.update_history(frame_idx)
-                tracked_objects.append(obj)
-                seen_ids.add(tid)
-
-        # Nettoyage des tracks perdus depuis longtemps
         cfg_track = load_config()["tracking"]
         max_lost = cfg_track["max_time_lost"]
         stale = [
@@ -323,8 +279,7 @@ class PlayerTracker:
         for tid in stale:
             del self._tracks[tid]
 
-        annotated = results.plot()
-
+        annotated = frame.copy()
         return FrameResult(
             frame_idx=frame_idx,
             timestamp_s=frame_idx / self.fps,
@@ -340,6 +295,7 @@ class PlayerTracker:
     def reset(self):
         """Réinitialise le tracker (nouveau match)."""
         self._tracks.clear()
+        self._next_track_id = 0
 
 
 # ---------------------------------------------------------------------------

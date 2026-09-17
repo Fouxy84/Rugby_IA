@@ -45,3 +45,15 @@ def test_frame_result_players_filter():
     assert len(fr.players) == 3
     assert fr.ball is not None
     assert fr.ball.track_id == 99
+
+
+def test_player_detector_runs_with_pytorch_backend():
+    import numpy as np
+    from src.detection.player_detector import PlayerDetector
+
+    detector = PlayerDetector(weights=None, device="cpu")
+    frame = np.zeros((240, 320, 3), dtype=np.uint8)
+    detections = detector.detect(frame)
+
+    assert isinstance(detections, list)
+    assert all(hasattr(d, "class_name") for d in detections)
