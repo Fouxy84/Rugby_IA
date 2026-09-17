@@ -41,7 +41,7 @@ python -m venv .venv
 source .venv/bin/activate  # ou .venv\Scripts\activate (Windows)
 
 # Installer les dépendances
-make install-dev
+pip install -r requirements.txt
 
 # Setup CI/CD local (pre-commit hooks)
 python scripts/setup_cicd.py
@@ -53,7 +53,7 @@ python scripts/setup_cicd.py
 # Coder votre feature
 # Ajouter des tests
 # Vérifier les tests localement
-make test
+pytest tests/ -q
 
 # Linter et formater
 make lint
@@ -74,7 +74,7 @@ git push origin feature/votre-feature
 ```
 
 **Convention de commits** (Conventional Commits) :
-```
+```text
 <type>(<scope>): <subject>
 
 <body>
@@ -123,7 +123,7 @@ Les reviewers vérifieront :
 ### 8. Merge
 
 Une fois approuvé et tous les checks passés :
-- Squash merges sont préférés pour garder `main` clean
+- Les squash merges sont préférés pour garder `main` propre
 - Votre branche sera supprimée après merge
 
 ## Directives de qualité de code
@@ -138,6 +138,8 @@ Une fois approuvé et tous les checks passés :
 # Vérifier la couverture
 pytest tests/ --cov=src --cov-report=html
 ```
+
+> Le projet est aujourd’hui validé avec Python + PyTorch, et les tests doivent être exécutés dans l’environnement Python du projet (par ex. le venv ou l’environnement conda configuré pour l’IA).
 
 ### Code Style
 

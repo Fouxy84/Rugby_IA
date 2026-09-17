@@ -8,35 +8,31 @@ et ce projet suit [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- CI/CD Pipeline avec GitHub Actions
-- Pre-commit hooks pour code quality
-- Tests unitaires étendus avec couverture
-- Makefile pour commandes dev simplifiées
-- Documentation CI/CD
-- CONTRIBUTING.md pour les contributeurs
-- Support CPU-only (YOLOv8s, résolution 640×360)
+- Pipeline de tests validée sur environnement PyTorch CPU
+- Documentation alignée sur la stack PyTorch/TorchVision
+- Support de dépendances optionnelles pour téléchargement vidéo (`yt-dlp`)
+- Tests de régression pour la détection
 
 ### Changed
-- config.yaml optimisé pour CPU
-- Réduction epochs fine-tuning : 100 → 15
-- Batch size réduit pour CPU : 16 → 4
+- Migration du moteur de détection vers PyTorch/TorchVision
+- Configuration du projet alignée sur un runtime Python/PyTorch compatible
+- Nettoyage des références obsolètes à Ultralytics / YOLOv8 dans le cœur applicatif
 
 ### Fixed
-- NumPy CPU dispatcher initialization error
-- Terminal encoding issues en Windows
+- Import bloquant de `yt_dlp` lors des tests API sans dépendance installée
+- Régression de compatibilité avec les tests async/benchmark via installation des plugins pytest requis
 
 ## [1.0.0] - 2026-06-01
 
 ### Added
-- Détection YOLOv8x avec ByteTrack
-- Classification phases de jeu (CNN-LSTM)
+- Détection d’objets via modèle PyTorch/TorchVision
+- Classification des phases de jeu (CNN-LSTM)
 - Génération de heatmaps
 - Reconnaissance de patterns tactiques
-- Détection d'événements (essais, mêlées, etc.)
+- Détection d’événements (essais, mêlées, etc.)
 - API FastAPI avec WebSocket
 - Dashboard Streamlit
-- Fine-tuning YOLOv8 sur Roboflow
-- Download dataset depuis Roboflow
+- Support dataset Roboflow optionnel
 - MLflow experiment tracking
 - Docker + docker-compose
 - Configuration YAML centralisée

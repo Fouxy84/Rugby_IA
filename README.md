@@ -9,7 +9,7 @@
 
 > Système d'analyse IA temps réel de matchs de rugby : détection des joueurs, classification des phases de jeu, heatmaps, reconnaissance de patterns tactiques et key insights automatiques.
 
-**Stack principale :** YOLOv8 (Small pour CPU) · ByteTrack · CNN-LSTM · MLflow · Docker · FastAPI · Streamlit
+**Stack principale :** PyTorch · TorchVision · CNN-LSTM · MLflow · Docker · FastAPI · Streamlit
 
 ---
 
@@ -35,23 +35,18 @@ make dev  # Démarrer API + Dashboard
 
 ---
 
-## 🏆 Résultats clés (CPU-Optimized)
+## 🏆 Résultats clés (PyTorch / CPU)
 
 | Métrique | Valeur | Conditions |
 |---|---|---|
-| **Modèle détection** | **YOLOv8s** | Petit modèle pour CPU (1.6M params vs 68M YOLOv8x) |
-| **Résolution** | **640×360** | Réduit de 1280×720 pour performance CPU |
-| **Batch size** | **4** | Réduit de 16 pour RAM limitée |
-| **FPS CPU** | **~8-12 FPS** | Estimation (1280×720 → 640×360) |
-| **RAM utilisée** | **~2-3 GB** | Vs 10-12 GB en GPU |
-| **Fine-tuning** | **15 epochs** | Vs 100 en version GPU |
+| **Modèle de détection** | **TorchVision Faster R-CNN** | Backend PyTorch natif |
+| **Plateforme** | **CPU-first** | Compatible GPU si disponible |
+| **Résolution** | **640×360** | Réduit pour performance CPU |
+| **Contrôle de qualité** | **Seuil de confiance configurable** | Dans la config globale |
+| **Mémoire** | **Réduite par rapport aux modèles vision lourds** | Compatible avec CPU standard |
+| **Pipeline** | **Détection + tracking + phase classifier** | Orchestré par le pipeline temps réel |
 
-Augmentations adaptées au rugby : occlusions entre joueurs (`erasing=0.4`), variations d'éclairage de stade (`hsv_v=0.4`), flips horizontaux (`fliplr=0.5`).
-
-```bash
-# Reproduire le fine-tuning (CPU, ~30-45 min)
-python scripts/finetune_yolo_rugby.py --data data/roboflow/merged/data.yaml --epochs 15 --device cpu --batch 4
-```
+Le code est désormais construit autour de PyTorch et torchvision, sans dépendance Ultralytics dans le cœur applicatif.
 
 ---
 
@@ -63,7 +58,7 @@ Rugby_IA/
 ├── src/
 │   ├── ingestion/             # Téléchargement & lecture vidéo
 │   │   └── video_downloader.py  (VideoDownloader, VideoReader, RugbyDataConnector)
-│   ├── detection/             # YOLOv8 + ByteTrack
+│   ├── detection/             # Détection PyTorch / TorchVision
 │   │   └── player_detector.py   (PlayerDetector, PlayerTracker, TeamClassifier)
 │   ├── analysis/              # Modules d'analyse
 │   │   ├── phase_classifier.py  (CNN-LSTM, 9 phases de jeu)
@@ -82,7 +77,10 @@ Rugby_IA/
 ├── tests/                     # Tests unitaires
 ├── Dockerfile
 ├── docker-compose.yml
-└── requirements.txt
+├── requirements.txt
+├── requirements-cpu.txt
+├── README.md
+└── pyproject.toml
 ```
 
 ---
@@ -91,7 +89,7 @@ Rugby_IA/
 
 | Fonctionnalité | Détails |
 |---|---|
-| **Détection joueurs** | YOLOv8x (fine-tunable) + ByteTrack multi-objet |
+| **Détection joueurs** | Modèle PyTorch / TorchVision pour détection d’objets |
 | **Classification équipes** | K-Means sur couleur de maillot |
 | **Phases de jeu** | CNN-LSTM : mêlée, touche, essai, ruck, maul, coup de pied, jeu courant |
 | **Événements** | Détection automatique : essais, mêlées, touches, pénalités |
@@ -99,7 +97,7 @@ Rugby_IA/
 | **Patterns tactiques** | Pick & go, switch, linebreak, défense rideau, maul drive |
 | **Real-time tagging** | Événements horodatés exportables JSON |
 | **Key Insights** | 6 insights automatiques par frame |
-| **Sources vidéo** | Upload local, YouTube, Dailymotion, Vimeo (yt-dlp) |
+| **Sources vidéo** | Upload local, YouTube via yt-dlp si installé |
 | **API REST + WS** | FastAPI + WebSocket pour streaming temps réel |
 | **Dashboard** | Streamlit multi-pages |
 | **MLOps** | MLflow pour le suivi des expériences |
@@ -168,8 +166,8 @@ make format           # Formater le code automatiquement
 make format-check     # Vérifier sans modifier
 
 # --- Données & Entraînement ---
-make download-data    # Télécharger dataset Roboflow
-make train            # Fine-tune YOLOv8 (15 epochs CPU)
+make download-data    # Télécharger dataset Roboflow (si utilisé)
+make train            # Entraînement du phase classifier / pipeline
 make train-quick      # Test rapide (3 epochs)
 
 # --- Cleanup ---
@@ -261,7 +259,7 @@ curl "http://localhost:8000/api/matches/{id}/heatmap?mode=home" --output heatmap
 
 ### Préparer les données
 
-```
+```text
 data/annotations/
 ├── melee/
 │   ├── clip_001/  (frames JPEG numérotées)
@@ -285,6 +283,8 @@ python scripts/train_model.py \
 
 Le meilleur modèle est sauvegardé dans `data/models/phase_classifier.pt`.  
 Les métriques sont suivies dans MLflow.
+
+> Les poids de détection du pipeline sont désormais chargés via un backend PyTorch/TorchVision, sans dépendance Ultralytics.
 
 ---
 
@@ -388,45 +388,29 @@ Les hooks pré-commit vérifieront avant chaque commit :
 
 ---
 
-## 🏋️ Fine-tuning YOLOv8 (CPU-Optimized)
+## 🏋️ Données et fine-tuning (optionnel)
+
+Le projet prend en charge les datasets de détection via Roboflow et les flux de données de rugby, mais le moteur applicatif principal est désormais basé sur PyTorch/TorchVision.
 
 ### 1. Obtenir une clé API Roboflow
 
-1. Connectez-vous sur [app.roboflow.com/adams-workspace-ppons](https://app.roboflow.com/adams-workspace-ppons)
+1. Connectez-vous sur [app.roboflow.com](https://app.roboflow.com)
 2. **Settings → API** → copier la clé
 3. L'ajouter dans `.env` :
-```
+
+```bash
 ROBOFLOW_API_KEY=votre_cle_roboflow_ici
 ```
 
-### 2. Télécharger le dataset
+### 2. Télécharger un dataset
 
 ```bash
-# Via Makefile
-make download-data
-
-# Ou manuellement
 python scripts/download_roboflow_dataset.py --api-key <YOUR_API_KEY>
-
-# Tous les datasets rugby
-python scripts/download_roboflow_dataset.py --api-key <KEY> --all
-
-# Dataset spécifique
-python scripts/download_roboflow_dataset.py \
-  --api-key <KEY> \
-  --workspace rugby-analysis \
-  --project rugby-player-detection \
-  --version 5
 ```
 
-### 3. Lancer l'entraînement
+### 3. Lancer l'entraînement / validation
 
 ```bash
-# Via Makefile (recommandé)
-make train            # 15 epochs sur CPU (~30-45 min)
-make train-quick      # 3 epochs test (~10-15 min)
-
-# Manuellement
 python scripts/finetune_yolo_rugby.py \
   --data data/roboflow/merged/data.yaml \
   --epochs 15 \
@@ -434,42 +418,7 @@ python scripts/finetune_yolo_rugby.py \
   --batch 4
 ```
 
-Le script :
-- Utilise **YOLOv8s** (petit modèle : 1.6M params)
-- Résolution **640×360** (réduit CPU)
-- Batch size **4** (RAM limitée)
-- Applique **augmentations rugby** (occlusions, éclairages, flips)
-- Log dans **MLflow** → `http://localhost:5000`
-- Exporte en **ONNX** + **TorchScript**
-- Copie le meilleur modèle → `data/models/rugby_detector.pt`
-
-### 4. Évaluation
-
-```bash
-# Valider sur set de validation
-python scripts/finetune_yolo_rugby.py \
-  --val-only \
-  --weights data/models/rugby_detector.pt \
-  --data data/roboflow/merged/data.yaml
-
-# Export ONNX seulement
-python scripts/finetune_yolo_rugby.py \
-  --export-only \
-  --weights data/models/rugby_detector.pt
-```
-
-### Optimisations CPU
-
-| Paramètre | GPU (yolov8x) | CPU (yolov8s) |
-|---|---|---|
-| **Modèle** | 68M params | 1.6M params |
-| **Résolution** | 1280×720 | 640×360 |
-| **Batch** | 16 | 4 |
-| **Epochs** | 100 | 15 |
-| **AMP** | Activé | Désactivé |
-| **RAM** | 10-12 GB | 2-3 GB |
-| **Durée (15 epochs)** | ~3 heures | ~45 min |
-| **FPS inférence** | ~35 FPS | ~8-12 FPS |
+Le projet reste compatible avec les workflows de fine-tuning historiques, mais le runtime de production est désormais nettement orienté PyTorch.
 
 ---
 
@@ -523,35 +472,34 @@ git push origin feature/votre-feature
 
 ---
 
-## �🔮 Roadmap
+## 🔮 Roadmap
 
 ### ✅ Complété (v1.0)
-- [x] Détection YOLOv8 multi-classe (joueurs, ballon, arbitre)
-- [x] Tracking temps réel ByteTrack
-- [x] Classification phases de jeu (CNN-LSTM)
+- [x] Détection d’objets via PyTorch/TorchVision
+- [x] Tracking temps réel multi-objets
+- [x] Classification des phases de jeu (CNN-LSTM)
 - [x] Heatmaps et patterns tactiques
 - [x] API FastAPI + WebSocket
 - [x] Dashboard Streamlit
-- [x] Fine-tuning sur Roboflow
-- [x] MLflow experiment tracking
+- [x] Pipeline MLflow
 - [x] Docker + docker-compose
 - [x] Benchmark FPS
 
-### 🚀 En cours (v1.1 — CPU-Optimized)
-- [x] Support CPU-only (YOLOv8s)
-- [x] Réduction résolution (640×360)
+### 🚀 En cours (v1.1)
+- [x] Support CPU-first
+- [x] Réduction de résolution pour exécution légère
 - [x] CI/CD Pipeline GitHub Actions
-- [x] Tests unitaires extensifs (70%+ coverage)
+- [x] Tests unitaires extensifs
 - [x] Pre-commit hooks
 - [x] Makefile pour dev
 - [x] Contributing guidelines
-- [ ] Documentation API (Swagger complet)
-- [ ] Performance monitoring
+- [ ] Documentation API plus détaillée
+- [ ] Monitoring de performance
 
 ### 📋 Futures améliorations (v1.2+)
 - [ ] Reconnaissance numéro de maillot (OCR)
 - [ ] Homographie pour calibration terrain automatique
-- [ ] Export clips automatique des événements
+- [ ] Export clips automatiques d’événements
 - [ ] Analyse comparative multi-matchs
 - [ ] Mode RTSP pour flux caméra en direct
 - [ ] Intégration SportsCode / Hudl
@@ -579,13 +527,13 @@ git push origin feature/votre-feature
 > Réduire `video.batch_size` dans `config.yaml` (essayer 2-4 au lieu de 8)
 
 **Q: Training très lent sur CPU**
-> C'est normal ! YOLOv8s prend ~45 min pour 15 epochs sur CPU. Réduire epochs avec `--epochs 3` pour tester.
+> C’est normal pour les workflows ML lourds sur CPU. Réduire la taille du batch ou le nombre d’epochs pour tester rapidement.
 
 **Q: Où sont mes modèles ?**
-> `data/models/rugby_detector.pt` après training (copié depuis les runs YOLOv8)
+> Les artefacts sont généralement stockés dans `data/models/` et les runs MLflow dans `mlruns/`.
 
 **Q: Comment utiliser mon propre dataset ?**
-> Créer `data.yaml` avec le format YOLOv8 et passer `--data chemin/vers/data.yaml`
+> Le projet prend en charge les datasets Roboflow et les structures de données de votre pipeline. Ajustez les chemins dans la config et la logique d’import selon votre convention.
 
 ### Development
 
@@ -609,11 +557,12 @@ git push origin feature/votre-feature
 
 ---
 
-- **Roboflow** : Datasets et labeling tools
-- **Ultralytics** : YOLOv8 framework
+- **PyTorch** : moteur principal de l’IA
+- **TorchVision** : modules de vision/computer vision
 - **FastAPI** : API framework
 - **Streamlit** : Dashboard
 - **MLflow** : Experiment tracking
+- **Roboflow** : datasets optionnels
 - **Community** : Contributions et feedback
 
 ---

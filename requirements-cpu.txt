@@ -4,7 +4,6 @@
 # Pour environnement sans GPU : PyTorch CPU, YOLOv8s, réductions RAM/CPU
 
 # --- Computer Vision & Deep Learning ---
-ultralytics>=8.2.0            # YOLOv8 + ByteTrack intégré
 torch>=2.2.0                  # CPU version already installed
 torchvision>=0.17.0
 opencv-python-headless>=4.9.0

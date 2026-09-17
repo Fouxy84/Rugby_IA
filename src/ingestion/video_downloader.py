@@ -9,10 +9,15 @@ import os
 import logging
 from pathlib import Path
 from typing import Optional, Generator
+
 import cv2
-import yt_dlp
 import requests
 import yaml
+
+try:
+    import yt_dlp  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover
+    yt_dlp = None
 
 logger = logging.getLogger("rugby_ia.ingestion")
 
@@ -54,6 +59,13 @@ class VideoDownloader:
             ],
         }
 
+    @staticmethod
+    def _require_yt_dlp() -> None:
+        if yt_dlp is None:
+            raise ModuleNotFoundError(
+                "yt-dlp n'est pas installé. Installez-le avec 'pip install yt-dlp' pour activer les téléchargements vidéo."
+            )
+
     def download(self, url: str, filename: Optional[str] = None) -> Path:
         """
         Télécharge une vidéo et retourne le chemin local du fichier.
@@ -65,6 +77,8 @@ class VideoDownloader:
         Returns:
             Chemin vers le fichier téléchargé.
         """
+        self._require_yt_dlp()
+
         if filename is None:
             # Récupère le titre pour nommer le fichier
             with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
@@ -90,6 +104,7 @@ class VideoDownloader:
 
     def list_available(self, url: str) -> list[dict]:
         """Retourne les formats disponibles pour une URL sans télécharger."""
+        self._require_yt_dlp()
         with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
             info = ydl.extract_info(url, download=False)
         return info.get("formats", [])
@@ -265,6 +280,9 @@ class RugbyDataConnector:
         """
         search_url = f"ytsearch10:{query} rugby match highlights"
         results = []
+        if yt_dlp is None:
+            logger.warning("yt-dlp non installé : recherche YouTube désactivée.")
+            return results
         with yt_dlp.YoutubeDL({"quiet": True, "extract_flat": True}) as ydl:
             try:
                 info = ydl.extract_info(search_url, download=False)

@@ -3,7 +3,6 @@
 # ============================================================
 
 # --- Computer Vision & Deep Learning ---
-ultralytics>=8.2.0            # YOLOv8 + ByteTrack intégré
 torch>=2.2.0
 torchvision>=0.17.0
 opencv-python-headless>=4.9.0
