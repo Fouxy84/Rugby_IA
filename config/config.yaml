@@ -28,8 +28,12 @@ video:
 
 # --- Détection joueurs (YOLOv8) ---
 detection:
-  model_name: "yolov8s.pt"         # CPU: small au lieu de yolov8x
-  fine_tuned_weights: "data/models/rugby_detector.pt"
+  backend: "torchvision"           # "yolo" ou "torchvision"
+  model_name: "yolov8n.pt"          # YOLO nano, téléchargé automatiquement si absent
+  pretrained: true                  # Poids COCO pour Faster R-CNN si aucun poids rugby n'est fourni
+  yolo_weights: "data/models/rugby_detector.pt"
+  torchvision_weights: "data/models/rugby_fasterrcnn.pt"
+  fine_tuned_weights: "data/models/rugby_detector.pt"  # Compatibilité avec le script d'entraînement YOLO
   confidence_threshold: 0.45
   iou_threshold: 0.50
   classes:

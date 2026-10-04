@@ -2,6 +2,8 @@
 
 import numpy as np
 import pytest
+import sys
+from types import SimpleNamespace
 from src.detection.player_detector import Detection, TrackedObject, FrameResult
 from src.detection.player_detector import PlayerDetector
 
@@ -43,9 +45,35 @@ def test_frame_result_players_filter():
 
 
 def test_player_detector_runs_with_pytorch_backend():
-    detector = PlayerDetector(weights=None, device="cpu")
+    detector = PlayerDetector(weights=None, device="cpu", pretrained=False)
     frame = np.zeros((240, 320, 3), dtype=np.uint8)
     detections = detector.detect(frame)
 
     assert isinstance(detections, list)
     assert all(hasattr(d, "class_name") for d in detections)
+
+
+def test_player_detector_converts_yolo_coco_results(monkeypatch):
+    class FakeBox:
+        cls = SimpleNamespace(item=lambda: 0)
+        conf = SimpleNamespace(item=lambda: 0.9)
+        xyxy = [SimpleNamespace(tolist=lambda: [10, 20, 50, 80])]
+
+    class FakeYOLO:
+        def __init__(self, model):
+            assert model == "yolov8n.pt"
+
+        def predict(self, **kwargs):
+            assert kwargs["source"].shape == (40, 60, 3)
+            return [SimpleNamespace(boxes=[FakeBox()])]
+
+    monkeypatch.setitem(sys.modules, "ultralytics", SimpleNamespace(YOLO=FakeYOLO))
+    monkeypatch.setattr(
+        "src.detection.player_detector.load_config",
+        lambda: {"detection": {"confidence_threshold": 0.4, "iou_threshold": 0.5, "device": "cpu"}},
+    )
+
+    detector = PlayerDetector(weights=None, device="cpu", backend="yolo")
+    detections = detector.detect(np.zeros((40, 60, 3), dtype=np.uint8))
+
+    assert detections == [Detection(10, 20, 50, 80, 0.9, 0, "player")]

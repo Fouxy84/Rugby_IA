@@ -109,34 +109,69 @@ class PlayerDetector:
     """
 
     CLASS_NAMES = {0: "player", 1: "referee", 2: "ball"}
-    COCO_FALLBACK = {0: "player", 32: "ball"}
+    YOLO_COCO_CLASSES = {0: "player", 32: "ball"}
+    TORCHVISION_COCO_CLASSES = {1: "player", 37: "ball"}
 
-    def __init__(self, weights: Optional[str] = None, device: Optional[str] = None):
+    def __init__(
+        self,
+        weights: Optional[str] = None,
+        device: Optional[str] = None,
+        backend: Optional[str] = None,
+        pretrained: Optional[bool] = None,
+    ):
         cfg = load_config()["detection"]
         self.conf = cfg["confidence_threshold"]
         self.iou = cfg["iou_threshold"]
         self.device = torch.device(device or cfg.get("device", "cpu"))
+        self.backend = (backend or cfg.get("backend", "torchvision")).lower()
+        if self.backend not in {"yolo", "torchvision"}:
+            raise ValueError("backend doit être 'yolo' ou 'torchvision'.")
+        self.pretrained = cfg.get("pretrained", True) if pretrained is None else pretrained
 
-        weights_path = weights or cfg.get("fine_tuned_weights")
+        if weights:
+            weights_path = weights
+        elif self.backend == "yolo":
+            weights_path = cfg.get("yolo_weights", cfg.get("fine_tuned_weights"))
+        else:
+            weights_path = cfg.get("torchvision_weights")
         if weights_path and Path(weights_path).exists():
-            self.model_path = weights_path
-            self.use_coco_fallback = False
+            self.model_path = str(weights_path)
+            self.has_custom_weights = True
         else:
             self.model_path = ""
-            self.use_coco_fallback = True
-            logger.info("Aucun poids PyTorch fine-tuné détecté, utilisation du backend torchvision initialisé par défaut.")
+            self.has_custom_weights = False
 
         self.model = self._build_model()
-        logger.info("Modèle PyTorch chargé sur %s", self.device)
+        logger.info("Modèle %s chargé sur %s", self.backend, self.device)
 
     def _build_model(self):
-        from torchvision.models.detection import fasterrcnn_resnet50_fpn  # noqa: PLC0415
+        if self.backend == "yolo":
+            from ultralytics import YOLO  # noqa: PLC0415
 
-        model = fasterrcnn_resnet50_fpn(
-            weights=None,
-            weights_backbone=None,
-            num_classes=3,
+            cfg = load_config()["detection"]
+            model_source = self.model_path or cfg.get("model_name", "yolov8n.pt")
+            self.use_coco_fallback = not self.has_custom_weights
+            return YOLO(model_source)
+
+        from torchvision.models.detection import (  # noqa: PLC0415
+            FasterRCNN_ResNet50_FPN_Weights,
+            fasterrcnn_resnet50_fpn,
         )
+
+        if self.has_custom_weights or not self.pretrained:
+            model = fasterrcnn_resnet50_fpn(
+                weights=None,
+                weights_backbone=None,
+                num_classes=3,
+            )
+            self.use_coco_fallback = False
+        else:
+            model = fasterrcnn_resnet50_fpn(
+                weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT,
+                weights_backbone=None,
+            )
+            self.use_coco_fallback = True
+
         model.to(self.device)
 
         if self.model_path:
@@ -161,6 +196,9 @@ class PlayerDetector:
         if frame is None or frame.size == 0:
             return []
 
+        if self.backend == "yolo":
+            return self._detect_yolo(frame)
+
         image = self._to_tensor(frame)
         with torch.no_grad():
             outputs = self.model([image])[0]
@@ -176,13 +214,10 @@ class PlayerDetector:
                 continue
 
             cid = int(label.item())
-            if cid not in self.CLASS_NAMES:
-                if self.use_coco_fallback and cid in self.COCO_FALLBACK:
-                    class_name = self.COCO_FALLBACK[cid]
-                else:
-                    continue
-            else:
-                class_name = self.CLASS_NAMES[cid]
+            class_names = self.TORCHVISION_COCO_CLASSES if self.use_coco_fallback else self.CLASS_NAMES
+            class_name = class_names.get(cid)
+            if class_name is None:
+                continue
 
             x1, y1, x2, y2 = [float(v) for v in box.tolist()]
             detections.append(
@@ -196,6 +231,40 @@ class PlayerDetector:
                     class_name=class_name,
                 )
             )
+        return detections
+
+    def _detect_yolo(self, frame: np.ndarray) -> list[Detection]:
+        results = self.model.predict(
+            source=frame,
+            device=str(self.device),
+            conf=self.conf,
+            iou=self.iou,
+            verbose=False,
+        )
+        detections: list[Detection] = []
+        class_names = self.CLASS_NAMES if self.has_custom_weights else self.YOLO_COCO_CLASSES
+
+        for result in results:
+            if result.boxes is None:
+                continue
+            for box in result.boxes:
+                cid = int(box.cls.item())
+                class_name = class_names.get(cid)
+                confidence = float(box.conf.item())
+                if class_name is None or confidence < self.conf:
+                    continue
+                x1, y1, x2, y2 = [float(value) for value in box.xyxy[0].tolist()]
+                detections.append(
+                    Detection(
+                        x1=x1,
+                        y1=y1,
+                        x2=x2,
+                        y2=y2,
+                        confidence=confidence,
+                        class_id=cid,
+                        class_name=class_name,
+                    )
+                )
         return detections
 
     def benchmark_fps(
@@ -226,7 +295,7 @@ class PlayerDetector:
             "fps_max": round(max(fps_values), 1),
             "ms_per_frame_mean": round(1000 * sum(times) / len(times), 2),
             "device": str(self.device),
-            "model": str(self.model_path or "torchvision_fasterrcnn"),
+            "model": str(self.model_path or getattr(self.model, "ckpt_path", f"{self.backend}_pretrained")),
             "resolution": f"{width}x{height}",
         }
         logger.info(

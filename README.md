@@ -46,7 +46,15 @@ make dev  # Démarrer API + Dashboard
 | **Mémoire** | **Réduite par rapport aux modèles vision lourds** | Compatible avec CPU standard |
 | **Pipeline** | **Détection + tracking + phase classifier** | Orchestré par le pipeline temps réel |
 
-Le code est désormais construit autour de PyTorch et torchvision, sans dépendance Ultralytics dans le cœur applicatif.
+Le détecteur du pipeline peut utiliser Faster R-CNN de TorchVision ou YOLO via Ultralytics. Choisissez le backend `yolo` ou `torchvision` dans `config/config.yaml`. Sans poids rugby, les deux utilisent leurs poids COCO pré-entraînés ; ils détectent les personnes et le ballon, sans distinguer joueurs et arbitres.
+
+Un script d'inférence YOLO autonome est également disponible. Il utilise `yolov8n.pt` par défaut, un modèle nano pré-entraîné COCO adapté à une exécution légère sur CPU. Les résultats annotés sont enregistrés sous `runs/detect_yolo/rugby/`.
+
+```bash
+python scripts/detect_yolo.py chemin/vers/match.mp4
+```
+
+Le poids est téléchargé automatiquement au premier lancement s'il n'est pas présent. Par défaut, seules les classes COCO personne et ballon sont affichées ; ce modèle générique ne distingue pas les joueurs des arbitres. Pour une image, une webcam (`0`) ou toutes les classes COCO, utilisez respectivement `image.jpg`, `0` ou l'option `--all-classes`. Un modèle rugby fine-tuné peut être fourni avec `--model chemin/vers/modele.pt`.
 
 ---
 
