@@ -2,11 +2,10 @@
 
 import numpy as np
 import pytest
-
+from src.detection.player_detector import Detection, TrackedObject, FrameResult
+from src.detection.player_detector import PlayerDetector
 
 def test_detection_dataclass():
-    from src.detection.player_detector import Detection
-
     d = Detection(
         x1=10, y1=20, x2=50, y2=80,
         confidence=0.9, class_id=0, class_name="player",
@@ -16,8 +15,6 @@ def test_detection_dataclass():
 
 
 def test_tracked_object_history():
-    from src.detection.player_detector import Detection, TrackedObject
-
     det = Detection(x1=0, y1=0, x2=20, y2=40, confidence=0.8, class_id=0, class_name="player")
     obj = TrackedObject(track_id=1, detection=det)
     for i in range(5):
@@ -27,8 +24,6 @@ def test_tracked_object_history():
 
 
 def test_frame_result_players_filter():
-    from src.detection.player_detector import Detection, TrackedObject, FrameResult
-
     players = [
         TrackedObject(track_id=i, detection=Detection(0, 0, 10, 10, 0.9, 0, "player"))
         for i in range(3)
@@ -48,9 +43,6 @@ def test_frame_result_players_filter():
 
 
 def test_player_detector_runs_with_pytorch_backend():
-    import numpy as np
-    from src.detection.player_detector import PlayerDetector
-
     detector = PlayerDetector(weights=None, device="cpu")
     frame = np.zeros((240, 320, 3), dtype=np.uint8)
     detections = detector.detect(frame)

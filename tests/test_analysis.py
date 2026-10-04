@@ -2,11 +2,14 @@
 
 import numpy as np
 import pytest
-
+from src.analysis.event_detector import GameEvent
+import time
+from src.analysis.event_detector import EventDetector
+from src.detection.player_detector import Detection, TrackedObject, FrameResult
+from src.analysis.heatmap_generator import HeatmapGenerator
+from src.analysis.pattern_recognizer import PatternResult
 
 def test_game_event_to_dict():
-    from src.analysis.event_detector import GameEvent
-
     ev = GameEvent(
         event_type="try",
         timestamp_s=45.5,
@@ -23,9 +26,6 @@ def test_game_event_to_dict():
 
 
 def test_event_detector_cooldown():
-    import time
-    from src.analysis.event_detector import EventDetector
-
     det = EventDetector()
     det._last_event_time["scrum"] = time.monotonic()
     assert not det._can_emit("scrum")
@@ -34,12 +34,8 @@ def test_event_detector_cooldown():
 
 
 def test_heatmap_generator_accumulation():
-    from src.detection.player_detector import Detection, TrackedObject, FrameResult
-    from src.analysis.heatmap_generator import HeatmapGenerator
-
     gen = HeatmapGenerator(resolution=(105, 68))
     frame = np.zeros((720, 1280, 3), dtype=np.uint8)
-
     player = TrackedObject(
         track_id=1,
         detection=Detection(640, 360, 660, 400, 0.9, 0, "player"),
@@ -74,20 +70,18 @@ def test_phase_classes():
 def test_rugby_field_dimensions():
     """Test les dimensions du terrain de rugby."""
     # Terrain international : 120m x 75m (incluant les zones d'en-but)
-    # Champ de jeu : 100m x 68m
+    # Champ de jeu : 100m x 70m
     field_length = 100
-    field_width = 68
+    field_width = 70
     try_zone_depth = 10
     
     assert field_length == 100
-    assert field_width == 68
+    assert field_width == 70
     assert try_zone_depth == 10
     assert (field_length - try_zone_depth) == 90
 
 
 def test_pattern_result_to_dict():
-    from src.analysis.pattern_recognizer import PatternResult
-
     p = PatternResult(
         pattern="linebreak",
         confidence=0.79,

@@ -32,8 +32,8 @@ def load_config() -> dict:
 
 
 # Dimensions réelles d'un terrain de rugby (en mètres)
-FIELD_LENGTH = 105.0   # x
-FIELD_WIDTH  = 68.0    # y
+FIELD_LENGTH = 100.0   # x
+FIELD_WIDTH  = 70.0    # y
 
 
 class HeatmapGenerator:

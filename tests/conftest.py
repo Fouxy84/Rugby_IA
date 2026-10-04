@@ -2,7 +2,11 @@
 
 import numpy as np
 import pytest
-
+from src.detection.player_detector import Detection
+from src.detection.player_detector import TrackedObject
+from src.detection.player_detector import FrameResult
+import yaml
+from pathlib import Path
 
 @pytest.fixture
 def sample_frame():
@@ -13,8 +17,7 @@ def sample_frame():
 @pytest.fixture
 def sample_detection():
     """Crée une détection de test."""
-    from src.detection.player_detector import Detection
-    
+
     return Detection(
         x1=100,
         y1=150,
@@ -29,7 +32,6 @@ def sample_detection():
 @pytest.fixture
 def sample_tracked_object(sample_detection):
     """Crée un objet suivi."""
-    from src.detection.player_detector import TrackedObject
     
     obj = TrackedObject(track_id=1, detection=sample_detection)
     obj.team = "home"
@@ -39,7 +41,6 @@ def sample_tracked_object(sample_detection):
 @pytest.fixture
 def sample_frame_result(sample_tracked_object, sample_frame):
     """Crée un FrameResult."""
-    from src.detection.player_detector import FrameResult
     
     return FrameResult(
         frame_idx=0,
@@ -52,9 +53,7 @@ def sample_frame_result(sample_tracked_object, sample_frame):
 @pytest.fixture
 def config():
     """Charge la configuration."""
-    import yaml
-    from pathlib import Path
-    
+   
     config_path = Path(__file__).parent.parent / "config" / "config.yaml"
     if config_path.exists():
         with open(config_path, "r") as f:
